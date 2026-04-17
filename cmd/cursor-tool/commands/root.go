@@ -6,7 +6,7 @@ import (
 
 var Version = "dev"
 
-var rootCmd = &cobra.Command{
+var RootCmd = &cobra.Command{
 	Use:     "cursor-tool",
 	Short:   "Cursor IDE Machine ID reset utility",
 	Long:    `cursor-tool resets Cursor IDE telemetry IDs (machineId, devDeviceId, macMachineId) across Windows, macOS and Linux.`,
@@ -14,12 +14,12 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute() error {
-	return rootCmd.Execute()
+	return RootCmd.Execute()
 }
 
 func init() {
-	rootCmd.AddCommand(resetCmd)
-	rootCmd.AddCommand(backupCmd)
-	rootCmd.AddCommand(restoreCmd)
-	rootCmd.AddCommand(statusCmd)
+	RootCmd.AddCommand(resetCmd)
+	RootCmd.AddCommand(backupCmd)
+	RootCmd.AddCommand(restoreCmd)
+	RootCmd.AddCommand(statusCmd)
 }
