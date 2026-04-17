@@ -11,38 +11,25 @@ import (
 
 var restoreCmd = &cobra.Command{
 	Use:   "restore",
-	Short: "Restore Cursor IDE storage from backup",
-	Long:  `Restore the Cursor IDE storage.json file from a previously created backup.`,
+	Short: "Restore Cursor IDE storage from latest backup",
+	Long:  `Restore the Cursor IDE storage.json file from the latest backup.`,
 	RunE:  runRestore,
 }
 
-func init() {
-	restoreCmd.Flags().StringP("file", "f", "", "Backup file to restore from (default: latest backup)")
-}
-
 func runRestore(cmd *cobra.Command, args []string) error {
-	log := logger.New()
-
-	backupFile, _ := cmd.Flags().GetString("file")
-
-	paths, err := platform.GetPaths()
+	storagePath, err := platform.GetStoragePath()
 	if err != nil {
-		return fmt.Errorf("failed to get platform paths: %w", err)
+		return fmt.Errorf("failed to get storage path: %w", err)
 	}
 
-	if backupFile == "" {
-		log.Info("No backup file specified, using latest backup...")
-		backupFile, err = backup.LatestBackup(paths)
-		if err != nil {
-			return fmt.Errorf("failed to find latest backup: %w", err)
-		}
+	mgr := backup.New(5)
+	logger.Info("Restoring from latest backup...")
+
+	restoredFrom, err := mgr.Restore(storagePath)
+	if err != nil {
+		return fmt.Errorf("failed to restore: %w", err)
 	}
 
-	log.Info("Restoring from: %s", backupFile)
-	if err := backup.Restore(backupFile, paths); err != nil {
-		return fmt.Errorf("failed to restore backup: %w", err)
-	}
-
-	log.Success("Backup restored successfully!")
+	logger.Success("Restored from: %s", restoredFrom)
 	return nil
 }
