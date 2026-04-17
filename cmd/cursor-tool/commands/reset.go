@@ -9,65 +9,49 @@ import (
 	"github.com/WarnetBes/cursor-tool/internal/logger"
 	"github.com/WarnetBes/cursor-tool/internal/platform"
 	"github.com/WarnetBes/cursor-tool/internal/storage"
-	"github.com/WarnetBes/cursor-tool/internal/uuid"
 	"github.com/spf13/cobra"
 )
 
 var resetCmd = &cobra.Command{
 	Use:   "reset",
 	Short: "Reset Cursor IDE Machine ID",
-	Long:  `Reset the Cursor IDE Machine ID by generating new UUIDs and updating storage.json and Windows Registry (on Windows).`,
+	Long:  `Reset the Cursor IDE Machine ID by generating new UUIDs and updating storage.json.`,
 	RunE:  runReset,
 }
 
 func init() {
-	resetCmd.Flags().BoolP("backup", "b", true, "Create backup before reset")
-	resetCmd.Flags().BoolP("tui", "t", false, "Launch interactive TUI mode")
+	resetCmd.Flags().BoolP("no-backup", "n", false, "Skip backup before reset")
 }
 
 func runReset(cmd *cobra.Command, args []string) error {
-	log := logger.New()
+	noBackup, _ := cmd.Flags().GetBool("no-backup")
 
-	backupFlag, _ := cmd.Flags().GetBool("backup")
-
-	paths, err := platform.GetPaths()
+	storagePath, err := platform.GetStoragePath()
 	if err != nil {
-		return fmt.Errorf("failed to get platform paths: %w", err)
+		return fmt.Errorf("failed to get storage path: %w", err)
 	}
 
-	if backupFlag {
-		log.Info("Creating backup before reset...")
-		if err := backup.Create(paths); err != nil {
-			log.Warn("Failed to create backup: %v", err)
-		}
+	mgr := backup.New(5)
+	if noBackup {
+		mgr = backup.New(0)
 	}
 
-	newIDs, err := uuid.GenerateIDs()
+	result, err := storage.ModifyStorageIDs(storagePath, mgr)
 	if err != nil {
-		return fmt.Errorf("failed to generate new IDs: %w", err)
+		return fmt.Errorf("failed to reset IDs: %w", err)
 	}
 
-	log.Info("Generated new Machine ID: %s", newIDs.MachineID)
-	log.Info("Generated new Device ID: %s", newIDs.DeviceID)
-	log.Info("Generated new Mac Machine ID: %s", newIDs.MacMachineID)
-
-	if err := storage.Write(paths.StorageJSON, newIDs); err != nil {
-		return fmt.Errorf("failed to write storage.json: %w", err)
+	if err := integrity.WriteHMAC(storagePath); err != nil {
+		logger.Warn("Failed to write HMAC: %v", err)
 	}
 
-	if err := integrity.WriteHMAC(paths.StorageJSON); err != nil {
-		log.Warn("Failed to write integrity HMAC: %v", err)
+	logger.Success("Machine ID reset successfully!")
+	if result.BackupPath != "" {
+		fmt.Fprintf(os.Stdout, "Backup: %s\n", result.BackupPath)
 	}
-
-	if err := platform.WriteRegistry(newIDs); err != nil {
-		log.Warn("Failed to update registry (non-Windows or no permissions): %v", err)
-	}
-
-	log.Success("Machine ID reset successfully!")
 	fmt.Fprintln(os.Stdout, "\nNew IDs:")
-	fmt.Fprintf(os.Stdout, "  machineId:    %s\n", newIDs.MachineID)
-	fmt.Fprintf(os.Stdout, "  devDeviceId:  %s\n", newIDs.DeviceID)
-	fmt.Fprintf(os.Stdout, "  macMachineId: %s\n", newIDs.MacMachineID)
-
+	for k, v := range result.After {
+		fmt.Fprintf(os.Stdout, "  %-30s %s\n", k+":", v)
+	}
 	return nil
 }
