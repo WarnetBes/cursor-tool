@@ -8,7 +8,6 @@ import (
 	"github.com/WarnetBes/cursor-tool/internal/integrity"
 	"github.com/WarnetBes/cursor-tool/internal/platform"
 	"github.com/WarnetBes/cursor-tool/internal/storage"
-	"github.com/WarnetBes/cursor-tool/internal/uuid"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -22,18 +21,18 @@ const (
 )
 
 var (
-	titleStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7C3AED")).Padding(0, 1)
-	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#10B981"))
-	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#EF4444"))
-	mutedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280"))
+	titleStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7C3AED")).Padding(0, 1)
+	successStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#10B981"))
+	errorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#EF4444"))
+	mutedStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280"))
 	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#F59E0B"))
 )
 
 type Model struct {
-	state    state
-	cursor   int
-	message  string
-	isError  bool
+	state     state
+	cursor    int
+	message   string
+	isError   bool
 	menuItems []string
 }
 
@@ -101,10 +100,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	var sb strings.Builder
-
 	sb.WriteString(titleStyle.Render("cursor-tool") + "\n")
 	sb.WriteString(mutedStyle.Render("Cursor IDE Machine ID Reset Utility") + "\n\n")
-
 	switch m.state {
 	case stateMenu:
 		for i, item := range m.menuItems {
@@ -114,9 +111,9 @@ func (m Model) View() string {
 				sb.WriteString("  " + item + "\n")
 			}
 		}
-		sb.WriteString("\n" + mutedStyle.Render("Use arrow keys to navigate, Enter to select, q to quit"))
+		sb.WriteString("\n" + mutedStyle.Render("Arrow keys to navigate, Enter to select, q to quit"))
 	case stateConfirmReset:
-		sb.WriteString("Are you sure you want to reset the Machine ID?\n\n")
+		sb.WriteString("Reset Machine ID? This cannot be undone.\n\n")
 		sb.WriteString("Press Enter to confirm, Esc to cancel.\n")
 	case stateResult:
 		if m.isError {
@@ -126,34 +123,35 @@ func (m Model) View() string {
 		}
 		sb.WriteString("\n" + mutedStyle.Render("Press Enter to go back"))
 	}
-
 	return sb.String()
 }
 
 func doReset() (string, bool) {
-	paths, err := platform.GetPaths()
+	storagePath, err := platform.GetStoragePath()
 	if err != nil {
 		return err.Error(), true
 	}
-	_ = backup.Create(paths)
-	newIDs, err := uuid.GenerateIDs()
+	mgr := backup.New(5)
+	result, err := storage.ModifyStorageIDs(storagePath, mgr)
 	if err != nil {
 		return err.Error(), true
 	}
-	if err := storage.Write(paths.StorageJSON, newIDs); err != nil {
-		return err.Error(), true
+	_ = integrity.WriteHMAC(storagePath)
+	newID := ""
+	for _, v := range result.After {
+		newID = v
+		break
 	}
-	_ = integrity.WriteHMAC(paths.StorageJSON)
-	_ = platform.WriteRegistry(newIDs)
-	return fmt.Sprintf("Reset successful!\nmachineId: %s", newIDs.MachineID), false
+	return fmt.Sprintf("Reset successful!\nmachineId: %s", newID), false
 }
 
 func doBackup() (string, bool) {
-	paths, err := platform.GetPaths()
+	storagePath, err := platform.GetStoragePath()
 	if err != nil {
 		return err.Error(), true
 	}
-	path, err := backup.CreateWithPath(paths)
+	mgr := backup.New(5)
+	path, err := mgr.Create(storagePath)
 	if err != nil {
 		return err.Error(), true
 	}
@@ -161,5 +159,17 @@ func doBackup() (string, bool) {
 }
 
 func doStatus() (string, bool) {
-	return "Status: use CLI 'status' command for full details", false
+	storagePath, err := platform.GetStoragePath()
+	if err != nil {
+		return err.Error(), true
+	}
+	ids, err := storage.ReadCurrentIDs(storagePath)
+	if err != nil {
+		return err.Error(), true
+	}
+	var sb strings.Builder
+	for _, k := range storage.TelemetryFields {
+		sb.WriteString(fmt.Sprintf("%s: %s\n", k, ids[k]))
+	}
+	return sb.String(), false
 }
