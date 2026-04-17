@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/WarnetBes/cursor-tool/internal/backup"
-	"github.com/WarnetBes/cursor-tool/internal/integrity"
 	"github.com/WarnetBes/cursor-tool/internal/platform"
 	"github.com/WarnetBes/cursor-tool/internal/storage"
 	tea "github.com/charmbracelet/bubbletea"
@@ -136,7 +135,6 @@ func doReset() (string, bool) {
 	if err != nil {
 		return err.Error(), true
 	}
-	_ = integrity.WriteHMAC(storagePath)
 	newID := ""
 	for _, v := range result.After {
 		newID = v
