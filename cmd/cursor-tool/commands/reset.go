@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/WarnetBes/cursor-tool/internal/backup"
-	"github.com/WarnetBes/cursor-tool/internal/integrity"
 	"github.com/WarnetBes/cursor-tool/internal/logger"
 	"github.com/WarnetBes/cursor-tool/internal/platform"
 	"github.com/WarnetBes/cursor-tool/internal/storage"
@@ -39,10 +38,6 @@ func runReset(cmd *cobra.Command, args []string) error {
 	result, err := storage.ModifyStorageIDs(storagePath, mgr)
 	if err != nil {
 		return fmt.Errorf("failed to reset IDs: %w", err)
-	}
-
-	if err := integrity.WriteHMAC(storagePath); err != nil {
-		logger.Warn("Failed to write HMAC: %v", err)
 	}
 
 	logger.Success("Machine ID reset successfully!")
